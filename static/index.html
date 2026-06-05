@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DealDrop</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a32;
+    --pink: #ff2d78;
+    --pink-dim: #ff2d7822;
+    --pink-glow: #ff2d7844;
+    --text: #f0f0f5;
+    --muted: #6b6b80;
+    --green: #00e5a0;
+    --yellow: #ffd166;
+    --radius: 12px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px 80px;
+    cursor: none;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── PINK CURSOR ── */
+  #pink-cursor {
+    position: fixed;
+    width: 28px;
+    height: 28px;
+    pointer-events: none;
+    z-index: 10000;
+    transform: translate(0, 0);
+    will-change: transform;
+  }
+
+  .container { position: relative; z-index: 1; width: 100%; max-width: 700px; }
+
+  header { text-align: center; margin-bottom: 48px; }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 52px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--pink) 0%, #ff7eb3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .tagline {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .search-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .input-row { display: flex; gap: 12px; }
+
+  input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    padding: 12px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+    cursor: none;
+  }
+
+  input:focus { border-color: var(--pink); }
+  input::placeholder { color: var(--muted); }
+
+  button#search-btn {
+    background: var(--pink);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 12px 28px;
+    transition: opacity 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  button#search-btn:hover { opacity: 0.88; }
+  button#search-btn:active { transform: scale(0.97); }
+  button#search-btn:disabled { opacity: 0.4; }
+
+  /* ── PROGRESS ── */
+  #progress { display: none; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    animation: fadeSlide 0.3s ease both;
+  }
+
+  .step.active { color: var(--text); }
+  .step.done { color: var(--green); }
+  .step.error { color: #ff6b6b; }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-icon { width: 20px; text-align: center; flex-shrink: 0; }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--pink);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* restaurant progress block */
+  #rest-progress {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-top: 4px;
+  }
+
+  .rest-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .rest-count {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--pink);
+  }
+
+  .rest-name {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+
+  .bar-wrap {
+    background: var(--surface2);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--pink), #ff7eb3);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px var(--pink-glow);
+  }
+
+  /* ── SIDE QUEST HUD ── */
+  #side-quest {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 180px;
+    background: #0d0d0fee;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 16px 16px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 8000;
+    box-shadow: 0 0 24px var(--pink-dim);
+    backdrop-filter: blur(8px);
+  }
+
+  #score-display {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--pink);
+  }
+
+  #curved-text-wrap {
+    width: 130px;
+    height: 130px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #curved-text-wrap svg.arc-text {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+
+  #hud-monster {
+    width: 58px;
+    height: 58px;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 0 8px var(--pink-glow));
+  }
+
+  #play-btn {
+    background: transparent;
+    border: 1px solid var(--pink);
+    border-radius: 20px;
+    color: var(--pink);
+    cursor: none;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 7px 32px;
+    transition: background 0.2s, box-shadow 0.2s;
+    letter-spacing: 0.05em;
+    width: 100%;
+  }
+  #play-btn:hover { background: var(--pink-dim); box-shadow: 0 0 12px var(--pink-glow); }
+
+  /* ── MONSTER ── */
+  #monster {
+    position: fixed;
+    width: 52px;
+    height: 52px;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+    display: none;
+    filter: drop-shadow(0 0 8px var(--pink-glow));
+  }
+
+  .food-particle {
+    position: fixed;
+    font-size: 20px;
+    pointer-events: none;
+    z-index: 9998;
+    animation: floatFood 3s ease-in-out infinite;
+    user-select: none;
+  }
+
+  @keyframes floatFood {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 0.85; }
+    50%  { transform: translateY(-14px) rotate(12deg); opacity: 1; }
+    100% { transform: translateY(0) rotate(0deg); opacity: 0.85; }
+  }
+
+  .nom-burst {
+    position: fixed;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--yellow);
+    pointer-events: none;
+    z-index: 10001;
+    transform: translate(-50%, -50%);
+    animation: burstOut 0.7s ease forwards;
+  }
+
+  @keyframes burstOut {
+    0%   { opacity: 1; transform: translate(-50%,-50%) scale(0.5); }
+    60%  { opacity: 1; transform: translate(-50%,-130%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%,-200%) scale(1); }
+  }
+
+  /* ── RESULTS ── */
+  #results { display: none; flex-direction: column; gap: 12px; }
+
+  .results-header {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 4px;
+  }
+
+  .best-card {
+    background: var(--surface);
+    border: 1px solid var(--pink);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 24px var(--pink-dim);
+  }
+
+  .best-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--pink), #ff7eb3);
+  }
+
+  .best-badge { font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--pink); margin-bottom: 8px; }
+  .dish-name { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; line-height: 1.2; margin-bottom: 4px; }
+  .restaurant-name { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .price-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .price-effective { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--green); }
+  .price-original { font-size: 14px; color: var(--muted); text-decoration: line-through; }
+  .savings-tag { background: var(--pink-dim); border: 1px solid var(--pink-glow); border-radius: 6px; color: var(--pink); font-size: 12px; padding: 3px 10px; }
+  .meta-row { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .offer-tag { background: var(--surface2); border-radius: 6px; color: var(--yellow); font-size: 11px; padding: 3px 10px; display: inline-block; margin-top: 10px; }
+
+  .list-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .list-card:hover { border-color: var(--pink); }
+  .rank { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--border); min-width: 28px; }
+  .list-info { flex: 1; }
+  .list-dish { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .list-rest { font-size: 12px; color: var(--muted); }
+  .list-prices { text-align: right; }
+  .list-effective { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; }
+  .list-original { font-size: 11px; color: var(--muted); text-decoration: line-through; }
+  .list-savings { font-size: 11px; color: var(--pink); }
+
+  #error-msg { color: #ff6b6b; font-size: 13px; text-align: center; display: none; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- pink arrow cursor -->
+<svg id="pink-cursor" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="4,2 4,22 9,17 13,26 16,25 12,16 20,16" fill="#ff7eb3" stroke="#ff2d78" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>
+
+<!-- monster -->
+<svg id="monster" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="50" cy="58" rx="32" ry="28" fill="#ff2d78"/>
+  <circle cx="38" cy="48" r="9" fill="white"/>
+  <circle cx="62" cy="48" r="9" fill="white"/>
+  <circle id="eye-l" cx="40" cy="48" r="5" fill="#0d0d0f"/>
+  <circle id="eye-r" cx="64" cy="48" r="5" fill="#0d0d0f"/>
+  <circle cx="42" cy="46" r="2" fill="white"/>
+  <circle cx="66" cy="46" r="2" fill="white"/>
+  <path d="M36 66 Q50 80 64 66" stroke="#0d0d0f" stroke-width="3" fill="#0d0d0f" stroke-linecap="round"/>
+  <rect x="41" y="66" width="6" height="7" rx="2" fill="white"/>
+  <rect x="53" y="66" width="6" height="7" rx="2" fill="white"/>
+  <polygon points="30,32 24,12 38,28" fill="#cc1155"/>
+  <polygon points="70,32 76,12 62,28" fill="#cc1155"/>
+  <ellipse cx="18" cy="64" rx="8" ry="6" fill="#ff2d78" transform="rotate(-20,18,64)"/>
+  <ellipse cx="82" cy="64" rx="8" ry="6" fill="#ff2d78" transform="rotate(20,82,64)"/>
+</svg>
+
+<div class="container">
+  <header>
+    <div class="logo">DealDrop</div>
+    <div class="tagline">find the best food deal, automatically</div>
+  </header>
+
+  <div class="search-card">
+    <div class="input-row">
+      <input id="dish-input" type="text" placeholder="what are you craving?" />
+      <input id="loc-input" type="text" placeholder="your location" />
+    </div>
+    <button id="search-btn" onclick="startSearch()">DROP IT ↓</button>
+  </div>
+
+  <div id="progress">
+    <div id="steps"></div>
+    <div id="rest-progress">
+      <div class="rest-header">
+        <span>checking restaurants</span>
+        <span class="rest-count" id="rest-count">0/0</span>
+      </div>
+      <div class="rest-name" id="rest-name">—</div>
+      <div class="bar-wrap"><div class="bar-fill" id="rest-bar"></div></div>
+    </div>
+  </div>
+
+  <div id="side-quest">
+    <div id="score-display">score: 0</div>
+    <div id="curved-text-wrap">
+      <!-- curved text arc -->
+      <svg class="arc-text" viewBox="0 0 130 130">
+        <defs>
+          <path id="arc" d="M 15,65 A 50,50 0 1,1 115,65"/>
+        </defs>
+        <text font-family="Syne, sans-serif" font-size="13" font-weight="800" fill="#ffd166" letter-spacing="2">
+          <textPath href="#arc">FEED THE MONSTER</textPath>
+        </text>
+      </svg>
+      <!-- mini monster inside -->
+      <svg id="hud-monster" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="50" cy="58" rx="32" ry="28" fill="#ff2d78"/>
+        <circle cx="38" cy="48" r="9" fill="white"/>
+        <circle cx="62" cy="48" r="9" fill="white"/>
+        <circle id="hud-eye-l" cx="40" cy="48" r="5" fill="#0d0d0f"/>
+        <circle id="hud-eye-r" cx="64" cy="48" r="5" fill="#0d0d0f"/>
+        <circle cx="42" cy="46" r="2" fill="white"/>
+        <circle cx="66" cy="46" r="2" fill="white"/>
+        <path d="M36 66 Q50 80 64 66" stroke="#0d0d0f" stroke-width="3" fill="#0d0d0f" stroke-linecap="round"/>
+        <rect x="41" y="66" width="6" height="7" rx="2" fill="white"/>
+        <rect x="53" y="66" width="6" height="7" rx="2" fill="white"/>
+        <polygon points="30,32 24,12 38,28" fill="#cc1155"/>
+        <polygon points="70,32 76,12 62,28" fill="#cc1155"/>
+      </svg>
+    </div>
+    <button id="play-btn" onclick="toggleGame()">play</button>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div id="results">
+    <div class="results-header">best pick</div>
+    <div class="best-card" id="best-card"></div>
+    <div class="results-header" style="margin-top:8px">all results</div>
+    <div id="list-cards"></div>
+  </div>
+</div>
+
+<script>
+  // ── PINK CURSOR ──
+  const pinkCursor = document.getElementById('pink-cursor');
+  let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX;
+    my = e.clientY;
+    pinkCursor.style.left = (mx) + 'px';
+    pinkCursor.style.top = (my) + 'px';
+
+    if (gameActive) {
+      const dx = mx - monsterX;
+      const dy = my - monsterY;
+      const angle = Math.atan2(dy, dx);
+      const er = 3;
+      document.getElementById('eye-l').setAttribute('cx', 40 + Math.cos(angle) * er);
+      document.getElementById('eye-l').setAttribute('cy', 48 + Math.sin(angle) * er);
+      document.getElementById('eye-r').setAttribute('cx', 64 + Math.cos(angle) * er);
+      document.getElementById('eye-r').setAttribute('cy', 48 + Math.sin(angle) * er);
+    }
+  });
+
+  // ── MONSTER GAME ──
+  const monster = document.getElementById('monster');
+  let monsterX = 200, monsterY = 200;
+  let score = 0;
+  let gameActive = false;
+  let foods = [];
+  let foodInterval = null;
+  const FOOD_EMOJIS = ['🍔','🍕','🌮','🍜','🍣','🧁','🍩','🥗','🍟','🍦','🍱','🥟'];
+
+  function animateMonster() {
+    if (gameActive) {
+      monsterX += (mx - monsterX) * 0.055;
+      monsterY += (my - monsterY) * 0.055;
+      monster.style.left = monsterX + 'px';
+      monster.style.top = monsterY + 'px';
+
+      for (let i = foods.length - 1; i >= 0; i--) {
+        const f = foods[i];
+        if (!f.el || !f.el.parentNode) { foods.splice(i, 1); continue; }
+        const rect = f.el.getBoundingClientRect();
+        const fx = rect.left + rect.width / 2;
+        const fy = rect.top + rect.height / 2;
+        if (Math.hypot(monsterX - fx, monsterY - fy) < 44) eatFood(i, fx, fy);
+      }
+    }
+    requestAnimationFrame(animateMonster);
+  }
+  animateMonster();
+
+  function spawnFood() {
+    if (!gameActive) return;
+    const el = document.createElement('div');
+    el.className = 'food-particle';
+    el.textContent = FOOD_EMOJIS[Math.floor(Math.random() * FOOD_EMOJIS.length)];
+    const x = 60 + Math.random() * (window.innerWidth - 120);
+    const y = 60 + Math.random() * (window.innerHeight - 120);
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.animationDelay = (Math.random() * 2) + 's';
+    document.body.appendChild(el);
+    const food = { el };
+    foods.push(food);
+    setTimeout(() => { if (el.parentNode) el.remove(); }, 9000);
+  }
+
+  function eatFood(idx, fx, fy) {
+    const f = foods[idx];
+    if (f.el) f.el.remove();
+    foods.splice(idx, 1);
+    score++;
+    document.getElementById('score-display').textContent = `score: ${score}`;
+    const burst = document.createElement('div');
+    burst.className = 'nom-burst';
+    burst.textContent = ['NOM!','YUM!','CHOMP!','OM NOM!','DELISH!'][Math.floor(Math.random()*5)];
+    burst.style.left = fx + 'px';
+    burst.style.top = fy + 'px';
+    document.body.appendChild(burst);
+    setTimeout(() => burst.remove(), 700);
+  }
+
+  let playing = false;
+
+  function toggleGame() {
+    if (playing) {
+      playing = false;
+      gameActive = false;
+      monster.style.display = 'none';
+      if (foodInterval) clearInterval(foodInterval);
+      foods.forEach(f => { if (f.el && f.el.parentNode) f.el.remove(); });
+      foods = [];
+      document.querySelectorAll('.food-particle').forEach(e => e.remove());
+      document.getElementById('play-btn').textContent = 'play';
+    } else {
+      playing = true;
+      gameActive = true;
+      monster.style.display = 'block';
+      score = 0;
+      document.getElementById('score-display').textContent = 'score: 0';
+      spawnFood(); spawnFood(); spawnFood();
+      foodInterval = setInterval(spawnFood, 1400);
+      document.getElementById('play-btn').textContent = 'stop';
+    }
+  }
+
+  function startGame() {
+    // just show the banner, don't auto-start
+    const sq = document.getElementById('side-quest');
+    sq.style.display = 'flex';
+    document.getElementById('play-btn').textContent = 'play';
+  }
+
+  function stopGame() {
+    playing = false;
+    gameActive = false;
+    monster.style.display = 'none';
+    document.getElementById('side-quest').style.display = 'none';
+    if (foodInterval) clearInterval(foodInterval);
+    foods.forEach(f => { if (f.el && f.el.parentNode) f.el.remove(); });
+    foods = [];
+    document.querySelectorAll('.food-particle').forEach(e => e.remove());
+  }
+
+  // ── SEARCH ──
+  function startSearch() {
+    const dish = document.getElementById('dish-input').value.trim();
+    const location = document.getElementById('loc-input').value.trim();
+    if (!dish || !location) return;
+
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+    document.getElementById('steps').innerHTML = '';
+    document.getElementById('rest-progress').style.display = 'none';
+    document.getElementById('rest-bar').style.width = '0%';
+    document.getElementById('progress').style.display = 'flex';
+    document.getElementById('progress').style.flexDirection = 'column';
+    document.getElementById('progress').style.gap = '10px';
+    document.getElementById('search-btn').disabled = true;
+
+    startGame();
+
+    const es = new EventSource(`/search?dish=${encodeURIComponent(dish)}&location=${encodeURIComponent(location)}`);
+
+    es.onmessage = e => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.event === 'step') {
+        addStep(msg.msg, msg.status || 'loading');
+      }
+
+      if (msg.event === 'restaurant_progress') {
+        const rp = document.getElementById('rest-progress');
+        rp.style.display = 'flex';
+        document.getElementById('rest-count').textContent = `${msg.current}/${msg.total}`;
+        document.getElementById('rest-name').textContent = msg.name;
+        const pct = (msg.current / msg.total) * 100;
+        document.getElementById('rest-bar').style.width = pct + '%';
+      }
+
+      if (msg.event === 'result') {
+        es.close();
+        document.getElementById('search-btn').disabled = false;
+        stopGame();
+        document.getElementById('progress').style.display = 'none';
+        renderResults(msg.data);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      document.getElementById('search-btn').disabled = false;
+      stopGame();
+      document.getElementById('error-msg').textContent = 'Something went wrong. Try again.';
+      document.getElementById('error-msg').style.display = 'block';
+    };
+  }
+
+  function addStep(msg, status) {
+    const steps = document.getElementById('steps');
+    steps.querySelectorAll('.step.active').forEach(s => {
+      s.className = 'step done';
+      s.querySelector('.step-icon').innerHTML = '✓';
+    });
+    const div = document.createElement('div');
+    div.className = `step ${status === 'loading' ? 'active' : status}`;
+    const icon = status === 'loading' ? '<div class="spinner"></div>' : status === 'done' ? '✓' : '✗';
+    div.innerHTML = `<div class="step-icon">${icon}</div><span>${msg}</span>`;
+    steps.appendChild(div);
+  }
+
+  function fmt(n) { return '₹' + Number(n).toFixed(0); }
+
+  function renderResults(data) {
+    if (!data || data.length === 0) {
+      document.getElementById('error-msg').textContent = 'No results found.';
+      document.getElementById('error-msg').style.display = 'block';
+      return;
+    }
+
+    const best = data[0];
+    const hasSavings = best.savings > 0;
+
+    document.getElementById('best-card').innerHTML = `
+      <div class="best-badge">⚡ best deal</div>
+      <div class="dish-name">${best.dish_name}</div>
+      <div class="restaurant-name">${best.restaurant} · ${best.locality || ''} · ${best.delivery_time_mins} min</div>
+      <div class="price-row">
+        <div class="price-effective">${fmt(best.effective_price)}</div>
+        ${hasSavings ? `<div class="price-original">${fmt(best.price)}</div>` : ''}
+        ${hasSavings ? `<div class="savings-tag">saves ${fmt(best.savings)}</div>` : ''}
+      </div>
+      ${best.offer_label ? `<div class="offer-tag">🏷 ${best.offer_label}</div>` : ''}
+      <div class="meta-row">
+        <span>${best.is_veg ? '🟢 veg' : '🔴 non-veg'}</span>
+        <span>${best.in_stock ? 'in stock' : 'out of stock'}</span>
+      </div>
+    `;
+
+    const listCards = document.getElementById('list-cards');
+    listCards.innerHTML = '';
+    data.forEach((r, i) => {
+      const hasSav = r.savings > 0;
+      const div = document.createElement('div');
+      div.className = 'list-card';
+      div.innerHTML = `
+        <div class="rank">${String(i + 1).padStart(2, '0')}</div>
+        <div class="list-info">
+          <div class="list-dish">${r.dish_name}</div>
+          <div class="list-rest">${r.restaurant} · ${r.delivery_time_mins} min${r.offer_label ? ' · ' + r.offer_label : ''}</div>
+        </div>
+        <div class="list-prices">
+          <div class="list-effective">${fmt(r.effective_price)}</div>
+          ${hasSav ? `<div class="list-original">${fmt(r.price)}</div>` : ''}
+          ${hasSav ? `<div class="list-savings">saves ${fmt(r.savings)}</div>` : ''}
+        </div>
+      `;
+      listCards.appendChild(div);
+    });
+
+    const resultsEl = document.getElementById('results');
+    resultsEl.style.display = 'flex';
+    resultsEl.style.flexDirection = 'column';
+    resultsEl.style.gap = '12px';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') startSearch(); });
+</script>
+</body>
+</html>

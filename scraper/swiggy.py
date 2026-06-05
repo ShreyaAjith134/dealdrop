@@ -1,9 +1,16 @@
 from playwright.sync_api import sync_playwright
-import json
+
 
 def parse_results(data):
     results = []
-    cards = data["data"]["data"]["cards"]
+    try:
+        cards = data["data"]["cards"]
+    except KeyError:
+        try:
+            cards = data["data"]["data"]["cards"]
+        except KeyError:
+            return []
+
     for card in cards:
         grouped = card.get("groupedCard", {})
         dish_cards = grouped.get("cardGroupMap", {}).get("DISH", {}).get("cards", [])
@@ -13,12 +20,7 @@ def parse_results(data):
                 continue
             dish = info.get("info", {})
             restaurant = info.get("restaurant", {}).get("info", {})
-
             offer_info = restaurant.get("aggregatedDiscountInfoV3", {})
-            offer_header = offer_info.get("header", "")
-            offer_subheader = offer_info.get("subHeader", "")
-            offer_text = f"{offer_header} {offer_subheader}".strip() if offer_header else None
-
             slugs = restaurant.get("slugs", {})
 
             results.append({
@@ -31,36 +33,21 @@ def parse_results(data):
                 "restaurant_slug": slugs.get("restaurant"),
                 "locality": restaurant.get("locality"),
                 "delivery_time_mins": restaurant.get("sla", {}).get("deliveryTime"),
-                "offer": offer_text,
-                "bank_offers": [],
+                "offer_header": offer_info.get("header", ""),
+                "offer_subheader": offer_info.get("subHeader", ""),
             })
-    return results
+
+    return results[:10]
 
 
-def parse_bank_offers(data):
-    offers = []
-    try:
-        cards = data["data"]["cards"]
-        for card in cards:
-            inner = card.get("card", {}).get("card", {})
-            if "OfferWidget" in inner.get("@type", "") or "offersV2" in str(inner):
-                for o in inner.get("offers", []):
-                    offers.append({
-                        "header": o.get("header"),
-                        "description": o.get("description"),
-                        "coupon_code": o.get("couponCode"),
-                        "min_order": o.get("minOrderValue", 0) / 100,
-                        "discount_type": o.get("offerType"),
-                    })
-    except Exception as e:
-        print(f"offer parse error: {e}")
-    return offers
+def scrape_swiggy(dish: str, location: str, progress_queue=None):
+    def emit(msg):
+        if progress_queue:
+            progress_queue.put(msg)
 
-
-def scrape_swiggy(dish: str, location: str):
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=False,
+            headless=True,
             args=["--disable-blink-features=AutomationControlled"]
         )
         context = browser.new_context(
@@ -71,44 +58,31 @@ def scrape_swiggy(dish: str, location: str):
         page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
         search_captured = []
-        menu_captured = {}
 
         def handle_response(response):
-            if "search" in response.url and "query" in response.url:
+            if "search/v3" in response.url:
                 try:
                     data = response.json()
-                    search_captured.append({"url": response.url, "data": data})
-                    print(f"captured search: {response.url}")
-                except:
-                    pass
-            if "menu/pl" in response.url:
-                try:
-                    data = response.json()
-                    rid = None
-                    for part in response.url.split("&"):
-                        if "restaurantId" in part:
-                            rid = part.split("=")[-1]
-                    if rid:
-                        menu_captured[rid] = data
-                        print(f"captured menu for restaurant {rid}")
+                    search_captured.append(data)
                 except:
                     pass
 
         page.on("response", handle_response)
 
-        print("loading swiggy...")
+        emit({"type": "step", "msg": "Opening Swiggy..."})
         page.goto("https://www.swiggy.com")
         page.wait_for_timeout(3000)
 
+        emit({"type": "step", "msg": "Setting location..."})
         page.click("input[placeholder='Enter your delivery location']")
         page.wait_for_timeout(1000)
         page.keyboard.type(location, delay=100)
         page.wait_for_timeout(2000)
-
         page.wait_for_selector("div._2BgUI", timeout=5000)
         page.locator("div._2BgUI").first.click()
         page.wait_for_timeout(2000)
 
+        emit({"type": "step", "msg": f"Searching for {dish}..."})
         page.goto("https://www.swiggy.com/search")
         page.wait_for_timeout(2000)
         page.wait_for_selector("input[placeholder*='Search']", timeout=5000)
@@ -119,44 +93,30 @@ def scrape_swiggy(dish: str, location: str):
         page.wait_for_timeout(4000)
 
         if not search_captured:
-            print("no search results captured")
             browser.close()
+            emit({"type": "error", "msg": "No results found"})
             return []
 
         results = parse_results(search_captured[0])
-        print(f"\nfound {len(results)} dishes — fetching bank offers for each restaurant...")
+        emit({"type": "step", "msg": "Found dishes"})
 
+        # visit restaurants for any future enrichment, emit per-restaurant progress
         seen = set()
-        for r in results:
-            rid = r["restaurant_id"]
-            slug = r["restaurant_slug"]
-            if rid and slug and rid not in seen:
-                seen.add(rid)
-                url = f"https://www.swiggy.com/restaurants/{slug}/{rid}"
-                print(f"visiting: {url}")
-                page.goto(url)
-                page.wait_for_timeout(3000)
+        restaurants = [(r["restaurant_id"], r["restaurant_slug"], r["restaurant"]) 
+                       for r in results if r["restaurant_id"] and r["restaurant_slug"]]
+        unique = [(rid, slug, name) for rid, slug, name in restaurants if rid not in seen and not seen.add(rid)]
+        total = len(unique)
+
+        for i, (rid, slug, name) in enumerate(unique):
+            emit({"type": "restaurant_progress", "current": i + 1, "total": total, "name": name})
+            url = f"https://www.swiggy.com/restaurants/{slug}/{rid}"
+            try:
+                page.goto(url, wait_until="domcontentloaded")
+                page.wait_for_timeout(2000)
+            except:
+                pass
 
         browser.close()
 
-    for r in results:
-        rid = r["restaurant_id"]
-        if rid and rid in menu_captured:
-            r["bank_offers"] = parse_bank_offers(menu_captured[rid])
-
-    print(f"\nfinal results:\n")
-    for r in results:
-        offer_str = f" | offer: {r['offer']}" if r['offer'] else ""
-        bank_str = f" | bank offers: {len(r['bank_offers'])}" if r['bank_offers'] else ""
-        print(f"  {r['dish_name']} | ₹{r['price']} | {r['restaurant']} | {r['delivery_time_mins']} mins{offer_str}{bank_str}")
-        for b in r['bank_offers']:
-            print(f"      → {b['header']} | {b['description']} | code: {b['coupon_code']} | min: ₹{b['min_order']}")
-
-    with open("swiggy_results.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
-    print("\nsaved to swiggy_results.json")
+    emit({"type": "done"})
     return results
-
-
-if __name__ == "__main__":
-    scrape_swiggy("taro boba", "Bangalore")

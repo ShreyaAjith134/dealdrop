@@ -426,7 +426,10 @@
   <div class="search-card">
     <div class="input-row">
       <input id="dish-input" type="text" placeholder="what are you craving?" />
-      <input id="loc-input" type="text" placeholder="your location" />
+      <input id="city-input" type="text" placeholder="city (e.g. bangalore)" />
+    </div>
+    <div class="input-row">
+      <input id="area-input" type="text" placeholder="area / locality (optional)" />
     </div>
     <button id="search-btn" onclick="startSearch()">DROP IT ↓</button>
   </div>
@@ -612,8 +615,9 @@
   // ── SEARCH ──
   function startSearch() {
     const dish = document.getElementById('dish-input').value.trim();
-    const location = document.getElementById('loc-input').value.trim();
-    if (!dish || !location) return;
+    const city = document.getElementById('city-input').value.trim();
+    const area = document.getElementById('area-input').value.trim();
+    if (!dish || !city) return;
 
     document.getElementById('results').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
@@ -627,7 +631,7 @@
 
     startGame();
 
-    const es = new EventSource(`/search?dish=${encodeURIComponent(dish)}&location=${encodeURIComponent(location)}`);
+    const es = new EventSource(`/search?dish=${encodeURIComponent(dish)}&city=${encodeURIComponent(city)}&area=${encodeURIComponent(area)}`);
 
     es.onmessage = e => {
       const msg = JSON.parse(e.data);
@@ -689,7 +693,7 @@
     const hasSavings = best.savings > 0;
 
     document.getElementById('best-card').innerHTML = `
-      <div class="best-badge">⚡ best deal</div>
+      <div class="best-badge">⚡ best deal <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:${best.platform==='zomato'?'#e2173322':'#ff2d7822'};color:${best.platform==='zomato'?'#e21733':'#ff2d78'};font-weight:700;margin-left:6px">${best.platform?.toUpperCase()}</span></div>
       <div class="dish-name">${best.dish_name}</div>
       <div class="restaurant-name">${best.restaurant} · ${best.locality || ''} · ${best.delivery_time_mins} min</div>
       <div class="price-row">
@@ -713,7 +717,7 @@
       div.innerHTML = `
         <div class="rank">${String(i + 1).padStart(2, '0')}</div>
         <div class="list-info">
-          <div class="list-dish">${r.dish_name}</div>
+          <div class="list-dish">${r.dish_name} <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:${r.platform==='zomato'?'#e2173322':'#ff2d7822'};color:${r.platform==='zomato'?'#e21733':'#ff2d78'};font-weight:700;letter-spacing:0.05em">${r.platform?.toUpperCase()}</span></div>
           <div class="list-rest">${r.restaurant} · ${r.delivery_time_mins} min${r.offer_label ? ' · ' + r.offer_label : ''}</div>
         </div>
         <div class="list-prices">

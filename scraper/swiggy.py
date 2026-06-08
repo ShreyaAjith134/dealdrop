@@ -47,8 +47,8 @@ def scrape_swiggy(dish: str, location: str, progress_queue=None):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=True,
-            args=["--disable-blink-features=AutomationControlled"]
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"]
         )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -78,7 +78,7 @@ def scrape_swiggy(dish: str, location: str, progress_queue=None):
         page.wait_for_timeout(1000)
         page.keyboard.type(location, delay=100)
         page.wait_for_timeout(2000)
-        page.wait_for_selector("div._2BgUI", timeout=5000)
+        page.wait_for_selector("div._2BgUI", timeout=15000)
         page.locator("div._2BgUI").first.click()
         page.wait_for_timeout(2000)
 
